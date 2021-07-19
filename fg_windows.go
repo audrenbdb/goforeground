@@ -71,7 +71,7 @@ func findWindow(title string) (syscall.Handle, error) {
 	return hwnd, nil
 }
 
-func activate(name string, pid int, callback func() error) error {
+func activate(name string) error {
 	h, err := findWindow(name)
 	if err != nil {
 		return err

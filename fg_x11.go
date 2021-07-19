@@ -87,7 +87,7 @@ char *winame (Display *disp, Window win) {
 */
 import "C"
 
-func activate(windowName string, pid int, callback func() error) error {
+func activate(windowName string) error {
 	display := C.XOpenDisplay(nil)
 	defer C.XCloseDisplay(display)
 	C.activateWindowName(display, C.CString(windowName))
