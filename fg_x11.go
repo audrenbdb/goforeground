@@ -121,14 +121,7 @@ int getWindowPID (Display *disp, Window win) {
 */
 import "C"
 
-func activateByWindowTitle(windowName string) error {
-	display := C.XOpenDisplay(nil)
-	defer C.XCloseDisplay(display)
-	C.activateWindowByTitle(display, C.CString(windowName))
-	return nil
-}
-
-func activateByPID(pid int) error {
+func activate(title string, pid int) error {
 	display := C.XOpenDisplay(nil)
 	defer C.XCloseDisplay(display)
 	C.activateWindowByPID(display, C.int(pid))

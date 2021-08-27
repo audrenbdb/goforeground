@@ -4,6 +4,7 @@ package goforeground
 
 import (
 	"fmt"
+	"strings"
 	"syscall"
 	"unsafe"
 )
@@ -55,38 +56,16 @@ func getWindowThreadProcessId(hwnd syscall.Handle) (int, error) {
 	return int(pid), err
 }
 
-func findWindowByTitle(title string) (syscall.Handle, error) {
+func findWindow(title string, pid int) (syscall.Handle, error) {
 	var hwnd syscall.Handle
 	cb := syscall.NewCallback(func(h syscall.Handle, p uintptr) uintptr {
-		b := make([]uint16, 200)
-		_, err := getWindowText(h, &b[0], int32(len(b)))
-		if err != nil {
-			// ignore the error
-			return 1 // continue enumeration
+		if pidMatch(h, pid) {
+			if titleMatch(h, title) {
+				hwnd = h
+				return 0
+			}
 		}
-		if syscall.UTF16ToString(b) == title {
-			// note the window
-			hwnd = h
-			return 0 // stop enumeration
-		}
-		return 1 // continue enumeration
-	})
-	enumWindows(cb, 0)
-	if hwnd == 0 {
-		return 0, fmt.Errorf("No window with title '%s' found", title)
-	}
-	return hwnd, nil
-}
-
-func findWindowByPID(pid int) (syscall.Handle, error) {
-	var hwnd syscall.Handle
-	cb := syscall.NewCallback(func(h syscall.Handle, p uintptr) uintptr {
-		wpid, _ := getWindowThreadProcessId(h)
-		if pid == wpid && wpid != 0 {
-			hwnd = h
-			return 0 // stop enumeration
-		}
-		return 1 // continue enumeration
+		return 1
 	})
 	enumWindows(cb, 0)
 	if hwnd == 0 {
@@ -95,22 +74,28 @@ func findWindowByPID(pid int) (syscall.Handle, error) {
 	return hwnd, nil
 }
 
+func titleMatch(h syscall.Handle, title string) bool {
+	b := make([]uint16, 200)
+	_, err := getWindowText(h, &b[0], int32(len(b)))
+	if err != nil {
+		return false
+	}
+	return strings.Contains(syscall.UTF16ToString(b), title)
+}
+
+func pidMatch(h syscall.Handle, pid int) bool {
+	wpid, _ := getWindowThreadProcessId(h)
+	return pid == wpid && wpid != 0
+}
+
 func setForeground(h syscall.Handle) error {
 	procShowWindow.Call(uintptr(h), swRestore)
 	procSetForegroundWindow.Call(uintptr(h))
 	return nil
 }
 
-func activateByWindowTitle(name string) error {
-	h, err := findWindowByTitle(name)
-	if err != nil {
-		return err
-	}
-	return setForeground(h)
-}
-
-func activateByPID(pid int) error {
-	h, err := findWindowByPID(pid)
+func activate(title string, pid int) error {
+	h, err := findWindow(title, pid)
 	if err != nil {
 		return err
 	}
