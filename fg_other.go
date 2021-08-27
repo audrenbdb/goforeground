@@ -2,7 +2,11 @@
 
 package goforeground
 
-func activate(windowName string) error {
+func activateByWindowTitle(windowName string) error {
+	return nil
+}
+
+func activateByWindowPID(pid int) error {
 	return nil
 }
 

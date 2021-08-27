@@ -19,6 +19,7 @@ var (
 	user32                  = syscall.MustLoadDLL("user32.dll")
 	procEnumWindows         = user32.MustFindProc("EnumWindows")
 	procGetWindowTextW      = user32.MustFindProc("GetWindowTextW")
+	procGetWindowPID = user32.MustFindProc("GetWindowThreadProcessId")
 	procSetForegroundWindow = user32.MustFindProc("SetForegroundWindow")
 	procShowWindow          = user32.MustFindProc("ShowWindow")
 )
@@ -48,7 +49,13 @@ func getWindowText(hwnd syscall.Handle, str *uint16, maxCount int32) (len int32,
 	return
 }
 
-func findWindow(title string) (syscall.Handle, error) {
+func getWindowThreadProcessId(hwnd syscall.Handle) (int, error) {
+	var pid uintptr = 0
+	_, _, err := procGetWindowPID.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&pid)))
+	return int(pid), err
+}
+
+func findWindowByTitle(title string) (syscall.Handle, error) {
 	var hwnd syscall.Handle
 	cb := syscall.NewCallback(func(h syscall.Handle, p uintptr) uintptr {
 		b := make([]uint16, 200)
@@ -71,12 +78,41 @@ func findWindow(title string) (syscall.Handle, error) {
 	return hwnd, nil
 }
 
-func activate(name string) error {
-	h, err := findWindow(name)
-	if err != nil {
-		return err
+func findWindowByPID(pid int) (syscall.Handle, error) {
+	var hwnd syscall.Handle
+	cb := syscall.NewCallback(func(h syscall.Handle, p uintptr) uintptr {
+		wpid, _ := getWindowThreadProcessId(h)
+		if pid == wpid && wpid != 0 {
+			hwnd = h
+			return 0 // stop enumeration
+		}
+		return 1 // continue enumeration
+	})
+	enumWindows(cb, 0)
+	if hwnd == 0 {
+		return 0, fmt.Errorf("No window with pid %d found", pid)
 	}
+	return hwnd, nil
+}
+
+func setForeground(h syscall.Handle) error {
 	procShowWindow.Call(uintptr(h), swRestore)
 	procSetForegroundWindow.Call(uintptr(h))
 	return nil
+}
+
+func activateByWindowTitle(name string) error {
+	h, err := findWindowByTitle(name)
+	if err != nil {
+		return err
+	}
+	return setForeground(h)
+}
+
+func activateByPID(pid int) error {
+	h, err := findWindowByPID(pid)
+	if err != nil {
+		return err
+	}
+	return setForeground(h)
 }

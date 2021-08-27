@@ -14,10 +14,12 @@ package goforeground
 #include <X11/Xatom.h>
 
 Window *getDisplayWindows (Display *disp, unsigned long *len);
-char *winame (Display *disp, Window win);
+char *getWindownName (Display *disp, Window win);
 void activateWindow(Display *display, Window window);
+int getWindowPID (Display *disp, Window win);
 
-void activateWindowName(Display *disp, char *title) {
+
+void activateWindowByTitle(Display *disp, char *title) {
     int i;
     unsigned long len;
     Window *windows;
@@ -25,13 +27,30 @@ void activateWindowName(Display *disp, char *title) {
 
     windows = (Window*)getDisplayWindows(disp,&len);
     for (i=0;i<(int)len;i++) {
-        name = winame(disp,windows[i]);
+        name = getWindownName(disp,windows[i]);
 		if (strcmp(name, title) == 0) {
 			free(name);
 			activateWindow(disp, windows[i]);
 			break;
 		}
         free(name);
+    }
+	XFree(windows);
+	return;
+}
+
+void activateWindowByPID(Display *disp, int pid) {
+    int i;
+    unsigned long len;
+    Window *windows;
+    int wpid;
+    windows = (Window*)getDisplayWindows(disp,&len);
+    for (i=0;i<(int)len;i++) {
+        wpid = getWindowPID(disp, windows[i]);
+		if (pid == wpid) {
+			activateWindow(disp, windows[i]);
+			break;
+		}
     }
 	XFree(windows);
 	return;
@@ -72,7 +91,7 @@ Window *getDisplayWindows (Display *disp, unsigned long *len) {
 }
 
 
-char *winame (Display *disp, Window win) {
+char *getWindownName (Display *disp, Window win) {
     Atom prop = XInternAtom(disp,"WM_NAME",False), type;
     int form;
     unsigned long remain, len;
@@ -84,12 +103,34 @@ char *winame (Display *disp, Window win) {
 
     return (char *)list;
 }
+
+int getWindowPID (Display *disp, Window win) {
+    Atom prop = XInternAtom(disp,"_NET_WM_PID", True), type;
+    int form;
+    unsigned long remain, len;
+    unsigned char *result;
+ 	if (XGetWindowProperty(disp,win,prop,0,1,False,AnyPropertyType,
+                &type,&form,&len,&remain,&result) != Success) {
+        return 0;
+    }
+   int pid;
+   pid = result[1] * 256;
+   pid += result[0];
+   return pid;
+}
 */
 import "C"
 
-func activate(windowName string) error {
+func activateByWindowTitle(windowName string) error {
 	display := C.XOpenDisplay(nil)
 	defer C.XCloseDisplay(display)
-	C.activateWindowName(display, C.CString(windowName))
+	C.activateWindowByTitle(display, C.CString(windowName))
+	return nil
+}
+
+func activateByPID(pid int) error {
+	display := C.XOpenDisplay(nil)
+	defer C.XCloseDisplay(display)
+	C.activateWindowByPID(display, C.int(pid))
 	return nil
 }
