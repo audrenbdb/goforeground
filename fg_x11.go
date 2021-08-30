@@ -14,30 +14,8 @@ package goforeground
 #include <X11/Xatom.h>
 
 Window *getDisplayWindows (Display *disp, unsigned long *len);
-char *getWindownName (Display *disp, Window win);
 void activateWindow(Display *display, Window window);
 int getWindowPID (Display *disp, Window win);
-
-
-void activateWindowByTitle(Display *disp, char *title) {
-    int i;
-    unsigned long len;
-    Window *windows;
-    char *name;
-
-    windows = (Window*)getDisplayWindows(disp,&len);
-    for (i=0;i<(int)len;i++) {
-        name = getWindownName(disp,windows[i]);
-		if (strcmp(name, title) == 0) {
-			free(name);
-			activateWindow(disp, windows[i]);
-			break;
-		}
-        free(name);
-    }
-	XFree(windows);
-	return;
-}
 
 void activateWindowByPID(Display *disp, int pid) {
     int i;
@@ -90,20 +68,6 @@ Window *getDisplayWindows (Display *disp, unsigned long *len) {
     return (Window*)list;
 }
 
-
-char *getWindownName (Display *disp, Window win) {
-    Atom prop = XInternAtom(disp,"WM_NAME",False), type;
-    int form;
-    unsigned long remain, len;
-    unsigned char *list;
- 	if (XGetWindowProperty(disp,win,prop,0,1024,False,AnyPropertyType,
-                &type,&form,&len,&remain,&list) != Success) {
-        return NULL;
-    }
-
-    return (char *)list;
-}
-
 int getWindowPID (Display *disp, Window win) {
     Atom prop = XInternAtom(disp,"_NET_WM_PID", True), type;
     int form;
@@ -121,7 +85,7 @@ int getWindowPID (Display *disp, Window win) {
 */
 import "C"
 
-func activate(title string, pid int) error {
+func activate(pid int) error {
 	display := C.XOpenDisplay(nil)
 	defer C.XCloseDisplay(display)
 	C.activateWindowByPID(display, C.int(pid))

@@ -1,6 +1,8 @@
 package goforeground
 
-//Activate attempts to set a window foreground by its title and its process id
-func Activate(title string, pid int) error {
-	return activate(title, pid)
+//Activate attempts to set a window foreground by its process id
+//Linux and Windows are implemented; rest is unimplemented
+//and will return nil
+func Activate(pid int) error {
+	return activate(pid)
 }

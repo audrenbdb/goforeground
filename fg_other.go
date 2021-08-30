@@ -2,6 +2,6 @@
 
 package goforeground
 
-func activate(title string, pid int) error {
+func activate(pid int) error {
 	return nil
 }

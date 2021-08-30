@@ -4,7 +4,6 @@ package goforeground
 
 import (
 	"fmt"
-	"strings"
 	"syscall"
 	"unsafe"
 )
@@ -19,11 +18,22 @@ const (
 var (
 	user32                  = syscall.MustLoadDLL("user32.dll")
 	procEnumWindows         = user32.MustFindProc("EnumWindows")
-	procGetWindowTextW      = user32.MustFindProc("GetWindowTextW")
 	procGetWindowPID = user32.MustFindProc("GetWindowThreadProcessId")
+	procIsWindowVisible = user32.MustFindProc("IsWindowVisible")
+	procGetWindow = user32.MustFindProc("GetWindow")
+
+
 	procSetForegroundWindow = user32.MustFindProc("SetForegroundWindow")
 	procShowWindow          = user32.MustFindProc("ShowWindow")
+
 )
+
+func isMainWindow(hwnd syscall.Handle) bool {
+	isVisible, _, _ := procIsWindowVisible.Call(uintptr(hwnd))
+	gwOwner := uintptr(4)
+	isOwned, _, _ := procGetWindow.Call(uintptr(hwnd), gwOwner)
+	return isVisible == 1 && isOwned == 0
+}
 
 func enumWindows(enumFunc uintptr, lparam uintptr) (err error) {
 	r1, _, e1 := syscall.Syscall(procEnumWindows.Addr(), 2, uintptr(enumFunc), uintptr(lparam), 0)
@@ -37,18 +47,6 @@ func enumWindows(enumFunc uintptr, lparam uintptr) (err error) {
 	return
 }
 
-func getWindowText(hwnd syscall.Handle, str *uint16, maxCount int32) (len int32, err error) {
-	r0, _, e1 := syscall.Syscall(procGetWindowTextW.Addr(), 3, uintptr(hwnd), uintptr(unsafe.Pointer(str)), uintptr(maxCount))
-	len = int32(r0)
-	if len == 0 {
-		if e1 != 0 {
-			err = error(e1)
-		} else {
-			err = syscall.EINVAL
-		}
-	}
-	return
-}
 
 func getWindowThreadProcessId(hwnd syscall.Handle) (int, error) {
 	var pid uintptr = 0
@@ -56,14 +54,12 @@ func getWindowThreadProcessId(hwnd syscall.Handle) (int, error) {
 	return int(pid), err
 }
 
-func findWindow(title string, pid int) (syscall.Handle, error) {
+func findWindow(pid int) (syscall.Handle, error) {
 	var hwnd syscall.Handle
 	cb := syscall.NewCallback(func(h syscall.Handle, p uintptr) uintptr {
-		if pidMatch(h, pid) {
-			if titleMatch(h, title) {
-				hwnd = h
-				return 0
-			}
+		if pidMatch(h, pid) && isMainWindow(h) {
+			hwnd = h
+			return 0
 		}
 		return 1
 	})
@@ -72,15 +68,6 @@ func findWindow(title string, pid int) (syscall.Handle, error) {
 		return 0, fmt.Errorf("No window with pid %d found", pid)
 	}
 	return hwnd, nil
-}
-
-func titleMatch(h syscall.Handle, title string) bool {
-	b := make([]uint16, 200)
-	_, err := getWindowText(h, &b[0], int32(len(b)))
-	if err != nil {
-		return false
-	}
-	return strings.Contains(syscall.UTF16ToString(b), title)
 }
 
 func pidMatch(h syscall.Handle, pid int) bool {
@@ -94,8 +81,8 @@ func setForeground(h syscall.Handle) error {
 	return nil
 }
 
-func activate(title string, pid int) error {
-	h, err := findWindow(title, pid)
+func activate(pid int) error {
+	h, err := findWindow(pid)
 	if err != nil {
 		return err
 	}
