@@ -1,4 +1,5 @@
-//+build linux,!android,!nox11 freebsd openbsd !windows
+//go:build (linux && !android && !nox11) || freebsd || openbsd || !windows
+// +build linux,!android,!nox11 freebsd openbsd !windows
 
 package goforeground
 
@@ -7,6 +8,8 @@ package goforeground
 #cgo openbsd LDFLAGS: -L/usr/X11R6/lib -L/usr/local/lib
 #cgo freebsd openbsd LDFLAGS: -lX11 -lxkbcommon -lxkbcommon-x11 -lX11-xcb
 #cgo linux pkg-config: x11
+
+#include <stdio.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -69,18 +72,45 @@ Window *getDisplayWindows (Display *disp, unsigned long *len) {
 }
 
 int getWindowPID (Display *disp, Window win) {
-    Atom prop = XInternAtom(disp,"_NET_WM_PID", True), type;
-    int form;
-    unsigned long remain, len;
-    unsigned char *result;
- 	if (XGetWindowProperty(disp,win,prop,0,1,False,AnyPropertyType,
-                &type,&form,&len,&remain,&result) != Success) {
+    Atom prop = XInternAtom(disp,"_NET_WM_PID", True);
+
+    Atom actual_type_return;
+    int actual_format_return;
+    unsigned long remaining_bytes_in_prop_return, nitems_return;
+    unsigned char *result = NULL;
+
+    if (XGetWindowProperty(disp, win, prop,
+            0,                      // in: long_offset (in counts of 32 bits)
+            1,                      // in: long_length (in counts of 32 bits)
+            False,                  // in: delete
+            AnyPropertyType,        // in: req_type
+            &actual_type_return,                // out: actual_type_return
+            &actual_format_return,              // out: actual_format_return
+            &nitems_return,                     // out: nitems_return
+            &remaining_bytes_in_prop_return,    // out: bytes_after_return (remaining bytes in property)
+            &result                             // out: prop_return
+        ) != Success) {
+        // Just in case XGetWindowProperty allocated data despite failure, the doc doesn't specify clearly
+        if (result != NULL) {
+            XFree(result);
+        }
         return 0;
     }
-   int pid;
-   pid = result[1] * 256;
-   pid += result[0];
-   return pid;
+
+    // XGetWindowProperty sometimes returns null with Success
+    // No idea why, We can't do anything in this case, so just assume failure
+    if (result == NULL) {
+        return 0;
+    }
+
+    int pid;
+    pid = result[1] * 256;
+    pid += result[0];
+
+    // XGetWindowProperty: The function returns Success if it executes successfully. To free the resulting data, use XFree.
+    XFree(result);
+
+    return pid;
 }
 */
 import "C"
